@@ -6,9 +6,9 @@ This repo provides the code for training an interpretable Hierarchical Graph Tra
 
 This model is adapted from the sister version known as [G2PT](https://www.biorxiv.org/content/10.1101/2024.10.23.619940v2) 
 
-## Environmental Set-Up
+## Environment Set-Up
 
-Use the environment.yml is provided to establish the conda environment
+Use the environment.yml provided to establish the conda environment:
 ```
 conda env create python==3.6 --name envname --file=environment.yml
 ```
