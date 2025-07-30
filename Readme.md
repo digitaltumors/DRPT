@@ -2,8 +2,7 @@
 
 ## Overview
 
-This repo provides the code for training an interpretable Hierarchical Graph Transformer for modeling drug response.
-The model input genomics alteration (mutations, copy number deletions, and copy number alterations) along with some prior knowledge hierarhcy of cellular structure and function and propogatesthe effects of these alterations across a hiearchy  using attention. As a result, the model will optimize embedding representations for each and every node in the hierarchy, ultimatley reflecting the 'state' of a cellular system given the context of genomic alteration profiles. Subsequently, the embeddings states of each systems in the hierarchy are used to predict drug response.
+This repo provides the code for training an interpretable Hierarchical Graph Transformer for modeling drug response prediction and enabling precision oncology. The model input genomics alteration (mutations, copy number deletions, and copy number alterations) along with some prior knowledge hierarhcy of cellular structure and function and propogates the effects of these alterations across a hiearchy  using attention. As a result, the model will optimize embedding representations for each in the hierarchy, ultimatley reflecting the 'state' of a cellular system given the context of genomic alteration profiles. Subsequently, the embeddings states of each system in the hierarchy are used to predict drug response.
 
 This model is adapted from the sister version known as [G2PT](https://www.biorxiv.org/content/10.1101/2024.10.23.619940v2) 
 
