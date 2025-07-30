@@ -52,15 +52,15 @@ def main():
     parser.add_argument('--system_embedding', default=None)
     parser.add_argument('--gene_embedding', default=None)
 
-    parser.add_argument('--epochs', help='Training epochs for training', type=int, default=300)
+    parser.add_argument('--epochs', help='Training epochs for training', type=int, default=200)
     parser.add_argument('--compound_epochs', type=int, default=10)
     parser.add_argument('--lr', help='Learning rate', type=float, default=0.001)
     parser.add_argument('--wd', help='Weight decay', type=float, default=0.001)
     parser.add_argument('--z_weight', help='Z weight for sampling', type=float, default=1.)
 
-    parser.add_argument('--hidden_dims', help='hidden dimension for model', default=256, type=int)
+    parser.add_argument('--hidden_dims', help='hidden dimension for model', default=128, type=int)
     parser.add_argument('--dropout', help='dropout ratio', type=float, default=0.2)
-    parser.add_argument('--batch_size', help='Batch size', type=int, default=128)
+    parser.add_argument('--batch_size', help='Batch size', type=int, default=32)
     parser.add_argument('--val_step', help='Batch size', type=int, default=20)
 
     parser.add_argument('--cuda', help='Specify GPU', type=int, default=None)
