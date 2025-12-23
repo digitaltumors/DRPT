@@ -52,4 +52,4 @@ You may increase this number to speed up the training process within the memory 
 
 ## Model Training Example (Single GPU)
 
-Review the sample shell file, `DRPT-Integrin.sh`, to view how to run a training instance of the model.
+Review the sample shell file, `DRPT.sh`, to view how to run a training instance of the model.
