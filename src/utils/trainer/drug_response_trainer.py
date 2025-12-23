@@ -2,6 +2,7 @@ import os
 import gc
 import copy
 import pickle
+import math
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -26,34 +27,73 @@ class DrugResponseTrainer(object):
         self.beta = 0.1  # retained for SmoothL1Loss(beta)
         self.drug_response_loss = nn.SmoothL1Loss(self.beta)
 
-        # Optimizer / scheduler
+        # --- Optimizer ---
+        self.args = args
         self.optimizer = optim.AdamW(
             filter(lambda p: p.requires_grad, self.drug_response_model.parameters()),
-            lr=args.lr, weight_decay=args.wd
+            lr=self.args.lr, weight_decay=self.args.wd
         )
-        self.scheduler = optim.lr_scheduler.CyclicLR(
-            self.optimizer, base_lr=args.lr / 10, max_lr=args.lr, cycle_momentum=False
-        )
+
+        # --- Warmup + Cosine using LambdaLR (works on older torch) ---
+        warmup_pct          = getattr(self.args, "warmup_pct", 0.03)          # ~3% of total steps
+        warmup_start_factor = getattr(self.args, "warmup_start_factor", 0.1)  # start at 10% of target lr
+        min_lr              = getattr(self.args, "min_lr", self.args.lr / 100)
+
+        steps_per_epoch = len(self.drug_response_dataloader_drug)
+        total_steps     = max(1, steps_per_epoch * self.args.epochs)
+        warmup_steps    = max(1, int(total_steps * warmup_pct))
+        cosine_steps    = max(1, total_steps - warmup_steps)
+
+        base_lr = float(self.args.lr)
+        min_factor = float(min_lr) / max(base_lr, 1e-12)  # scale factor at cosine end
+
+        def lr_lambda(current_step: int):
+            # Linear warmup from warmup_start_factor -> 1.0
+            if current_step < warmup_steps:
+                if warmup_steps == 0:
+                    return 1.0
+                progress = current_step / float(max(1, warmup_steps))
+                return warmup_start_factor + (1.0 - warmup_start_factor) * progress
+            # Cosine decay from 1.0 -> min_factor
+            progress = (current_step - warmup_steps) / float(max(1, cosine_steps))
+            progress = min(max(progress, 0.0), 1.0)
+            cosine = 0.5 * (1.0 + math.cos(math.pi * progress))
+            return min_factor + (1.0 - min_factor) * cosine
+
+        self.scheduler = optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda)
 
         # Data / masks
         self.validation_dataloader = validation_dataloader
-        self.args = args
-        self.l2_lambda = args.l2_lambda
-        self.total_train_step = len(self.drug_response_dataloader_drug) * args.epochs
+        self.l2_lambda = self.args.l2_lambda
+        self.total_train_step = len(self.drug_response_dataloader_drug) * self.args.epochs
 
         tp = self.drug_response_dataloader_drug.dataset.tree_parser
-        self.nested_subtrees_forward = move_to(tp.get_nested_subtree_mask(args.subtree_order, direction='forward'), device)
-        self.nested_subtrees_backward = move_to(tp.get_nested_subtree_mask(args.subtree_order, direction='backward'), device)
+        self.nested_subtrees_forward = move_to(tp.get_nested_subtree_mask(self.args.subtree_order, direction='forward'), device)
+        self.nested_subtrees_backward = move_to(tp.get_nested_subtree_mask(self.args.subtree_order, direction='backward'), device)
         self.gene2system_mask = move_to(torch.tensor(tp.gene2sys_mask, dtype=torch.bool), device)
         self.system2gene_mask = move_to(torch.tensor(tp.sys2gene_mask, dtype=torch.bool), device)
         print("%d sys2gene in Dataloader" % tp.sys2gene_mask.sum())
 
         # Book-keeping
-        self.best_model = self.drug_response_model
+        self.best_model = self.drug_response_model  # backward-compat fallback
         self.fix_embedding = fix_embedding
         self.g2p_module_names = ["Mut2Sys", "Sys2Cell", "Cell2Sys"]  # preserved for compatibility
-        self.performance = {}  # {epoch: {"pearson_per_drug": {...}, "spearman_per_drug": {...}, "val_loss": float, "val_loss_per_drug": {...}}}
+        self.performance = {}  # {epoch: {..., "val_loss": float, "val_loss_per_drug": {...}, "lr": float}}
         self.loss = {}         # {epoch: mean_train_loss}
+
+        # --- Track both best-by-EMA(val loss) and best-by-Pearson(mean per drug) ---
+        self.best_model_by_ema = None
+        self.best_ema = float("inf")
+        self.best_model_by_pearson = None
+        self.best_pearson = -float("inf")
+
+        # Early stopping config (NOW defaults to False unless flag is set)
+        self.use_early_stop = bool(getattr(self.args, "early_stop", False))
+        self.es_beta      = getattr(self.args, "early_stop_ema_beta", 0.9)
+        self.es_patience  = getattr(self.args, "early_stop_patience", 5)     # # of validation checks
+        self.es_min_delta = getattr(self.args, "early_stop_min_delta", 0.0)  # require this much improvement
+        self._ema_val = None
+        self._bad_checks = 0
 
         # Optional: keep embeddings fixed during training
         if fix_embedding:
@@ -66,38 +106,61 @@ class DrugResponseTrainer(object):
 
     def train(self, epochs, output_path=None):
 
-        self.best_model = self.drug_response_model
-        best_performance = 0.0
+        stop_training = False
 
         for epoch in range(1, epochs + 1):
             self.train_epoch(epoch)
             gc.collect()
             torch.cuda.empty_cache()
 
-            # Validate on schedule
+            # Validate on schedule (skipped if no val dataloader)
             if (epoch % self.args.val_step) == 0 and (self.validation_dataloader is not None):
-                performance = self.evaluate(self.drug_response_model, self.validation_dataloader, epoch, name="Validation")
-                if performance > best_performance:
-                    # keep a CPU copy for checkpointing/saving outside GPU context
-                    self.best_model = copy.deepcopy(self.drug_response_model).to('cpu')
-                    best_performance = performance
+                # log current LR (version-proof)
+                current_lr = float(self.optimizer.param_groups[0]["lr"])
+                print(f"[Validation] Epoch {epoch}: current LR = {current_lr:.6g}")
+
+                # evaluate() fills self.performance[epoch] with val_loss, per-drug stats
+                mean_pearson_per_drug = self.evaluate(self.drug_response_model, self.validation_dataloader, epoch, name="Validation")
+
+                # attach LR into metrics for this epoch
+                self.performance.setdefault(epoch, {})["lr"] = current_lr
+
+                # --- Track best-by-Pearson (mean per-drug) ---
+                if mean_pearson_per_drug > self.best_pearson:
+                    self.best_pearson = mean_pearson_per_drug
+                    self.best_model_by_pearson = copy.deepcopy(self.drug_response_model).to('cpu')
+                    print(f"[Best-Pearson] New best mean per-drug Pearson {self.best_pearson:.6g} at epoch {epoch}")
+
+                # --- Early stopping on EMA(val_loss) + best-by-EMA checkpoint ---
+                if self.use_early_stop:
+                    val_loss = float(self.performance[epoch]["val_loss"])
+                    if self._ema_val is None:
+                        self._ema_val = val_loss
+                    else:
+                        self._ema_val = self.es_beta * self._ema_val + (1.0 - self.es_beta) * val_loss
+
+                    # Record EMA for plotting
+                    self.performance[epoch]["val_loss_ema"] = float(self._ema_val)
+
+                    improved = (self._ema_val < (self.best_ema - self.es_min_delta))
+                    if improved:
+                        self.best_ema = float(self._ema_val)
+                        self._bad_checks = 0
+                        self.best_model_by_ema = copy.deepcopy(self.drug_response_model).to('cpu')
+                        print(f"[Best-EMA] New best EMA {self.best_ema:.6g} at epoch {epoch}")
+                    else:
+                        self._bad_checks += 1
+                        print(f"[EarlyStop] No EMA improvement for {self._bad_checks}/{self.es_patience} validations "
+                              f"(EMA={self._ema_val:.6g}, best={self.best_ema:.6g})")
+                        if self._bad_checks > self.es_patience:
+                            print(f"[EarlyStop] Stopping at epoch {epoch}: EMA plateaued.")
+                            stop_training = True
+
                 torch.cuda.empty_cache()
                 gc.collect()
 
-            # Save model checkpoints on schedule
-            if (epoch % self.args.val_step) == 0:
-                if (not self.args.multiprocessing_distributed) or (
-                    self.args.multiprocessing_distributed and self.args.rank % torch.cuda.device_count() == 0
-                ):
-                    if output_path:
-                        output_path_epoch = f"{output_path}.{epoch}"
-                        print("Save to...", output_path_epoch)
-                        state = {"arguments": self.args}
-                        if self.args.multiprocessing_distributed:
-                            state["state_dict"] = self.drug_response_model.module.state_dict()
-                        else:
-                            state["state_dict"] = self.drug_response_model.state_dict()
-                        torch.save(state, output_path_epoch)
+            if stop_training:
+                break
 
         # Persist metrics (handles missing output_path gracefully)
         folder = os.path.dirname(output_path) if output_path else "."
@@ -111,7 +174,15 @@ class DrugResponseTrainer(object):
         with open(os.path.join(folder, f'epoch_loss{fold}.pkl'), 'wb') as handle:
             pickle.dump(self.loss, handle)
 
-    def get_best_model(self):
+    def get_best_model(self, which: str = "ema"):
+        """
+        which: "ema" or "pearson"
+        """
+        if which == "pearson" and self.best_model_by_pearson is not None:
+            return self.best_model_by_pearson
+        if which == "ema" and self.best_model_by_ema is not None:
+            return self.best_model_by_ema
+        # Fallback for backward compatibility
         return self.best_model
 
     def evaluate(self, model, dataloader, epoch, name="Validation"):
@@ -120,6 +191,7 @@ class DrugResponseTrainer(object):
           - per-drug Pearson/Spearman
           - global val_loss
           - per-drug val_loss in self.performance[epoch]["val_loss_per_drug"]
+          - (set in train()) current LR stored at this epoch in self.performance[epoch]["lr"]
         """
         trues = []
         results = []
@@ -177,7 +249,7 @@ class DrugResponseTrainer(object):
         print("Pearson R", pearson_global)
         print("Spearman Rho: ", spearman_global)
 
-        # Per-drug metrics + NEW: per-drug validation loss
+        # Per-drug metrics + per-drug validation loss
         r2_score_dict = {}
         pearson_dict = {}
         spearman_dict = {}
@@ -186,8 +258,9 @@ class DrugResponseTrainer(object):
         # CPU SmoothL1Loss once (avoids device issues)
         loss_fn_cpu = nn.SmoothL1Loss(self.beta)
 
-        for smiles, indice in test_grouped.groups.items():
-            # Per-drug loss (compute even if only one sample)
+        test_grouped_groups = test_grouped.groups
+        for smiles, indice in test_grouped_groups.items():
+            # Per-drug loss (compute even if one sample)
             y_true = torch.from_numpy(trues[indice]).to(torch.float32)
             y_pred = torch.from_numpy(results[indice]).to(torch.float32)
             per_loss = loss_fn_cpu(y_pred, y_true).item()
@@ -213,19 +286,20 @@ class DrugResponseTrainer(object):
         print("Validation SmoothL1 loss: ", val_loss)
 
         # Store all validation stats for this epoch (adds per-drug val loss)
-        self.performance[epoch] = {
+        prev = self.performance.get(epoch, {})
+        prev.update({
             "pearson_per_drug": pearson_dict,
             "spearman_per_drug": spearman_dict,
             "val_loss_per_drug": val_loss_per_drug,
             "val_loss": val_loss
-        }
+        })
+        self.performance[epoch] = prev
 
-        # Maintain original interface
+        # Return the selection signal: mean Pearson across drugs
         return pearson_per_drug
 
     def train_epoch(self, epoch):
         self.drug_response_model.train()
-        # Keep signature usage the same
         self.iter_minibatches(self.drug_response_dataloader_drug, epoch, name="DrugBatch", ccc=False, feature_loss=False)
 
     def iter_minibatches(self, dataloader, epoch, name="", ccc=True, feature_loss=True):
@@ -258,7 +332,7 @@ class DrugResponseTrainer(object):
             loss.backward()
             nn.utils.clip_grad_norm_(self.drug_response_model.parameters(), 1)
             self.optimizer.step()
-            self.scheduler.step()
+            self.scheduler.step()  # batch-wise scheduler step
 
             if self.fix_embedding:
                 # Re-freeze embeddings after optimizer step

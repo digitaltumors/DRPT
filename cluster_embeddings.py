@@ -71,7 +71,7 @@ class ClusterEmbeddings(object):
             cell_labels = system_embeddings[system].index.tolist()
 
             # Create KNN cosine similarity matrix from the embeddings
-            row, col = knn(x=embeddings, y=embeddings, k=15, cosine=True)
+            row, col = knn(x=embeddings, y=embeddings, k=10, cosine=True)
             cos_sim = F.cosine_similarity(embeddings[row], embeddings[col], dim=1)
             cos_sim = torch.clamp(cos_sim, min=0.0, max=1.0)
             row_cpu = row.detach().cpu().numpy()
@@ -82,7 +82,7 @@ class ClusterEmbeddings(object):
             # Convert to igraph object and run the Leiden algorithm
             graph = ig.Graph.Weighted_Adjacency(knn_dist_mat, mode="directed", loops=False)
             partition = la.find_partition(graph, la.RBConfigurationVertexPartition, weights="weight", 
-                                          resolution_parameter=0.8, seed=42)
+                                          resolution_parameter=1.0, seed=42)
 
             # Create dict mapping cluster label to list of cells
             cluster_info = {}
