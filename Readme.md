@@ -2,54 +2,61 @@
 
 ## Overview
 
-This repo provides the code for training an interpretable Hierarchical Graph Transformer for modeling drug response prediction and enabling precision oncology. The model input genomics alteration (mutations, copy number deletions, and copy number alterations) along with some prior knowledge hierarhcy of cellular structure and function and propogates the effects of these alterations across a hiearchy  using attention. As a result, the model will optimize embedding representations for each in the hierarchy, ultimatley reflecting the 'state' of a cellular system given the context of genomic alteration profiles. Subsequently, the embeddings states of each system in the hierarchy are used to predict drug response.
+This repository provides code for training an interpretable hierarchical graph transformer for drug-response prediction and precision oncology. DRPT accepts genomic alterations—including mutations, copy-number deletions, and copy-number amplifications—together with a prior-knowledge hierarchy of cellular structures and functions. Attention layers propagate the effects of these alterations through the hierarchy and learn an embedding that represents the state of each gene and cellular system. The model then uses these embeddings to predict drug response.
 
-This model is adapted from the sister version known as [G2PT](https://www.biorxiv.org/content/10.1101/2024.10.23.619940v2) 
+DRPT is adapted from the related [G2PT model](https://www.biorxiv.org/content/10.1101/2024.10.23.619940v2).
 
-## Environment Set-Up
+![Overview of the DRPT model and analysis workflow](Figure1.png)
 
-Use the environment.yml provided to establish the conda environment:
+## Environment setup
+
+Create the Conda environment defined in `environment.yml`:
+
+```bash
+conda env create --file environment.yml
+conda activate g2pt_env
 ```
-conda env create python==3.6 --name envname --file=environment.yml
-```
+
+## Performance
+
+The [`performance`](performance/) folder contains the notebook used to compare DRPT with baseline models and the serialized performance results for DRPT and the multitask model.
+
+## Patients
+
+The [`patients`](patients/) folder contains the MSK patient-transfer notebook, the patient-transfer training script, and the resulting patient risk scores. This workflow applies the pretrained DRPT representation to patient genomic data and trains a Cox proportional-hazards prediction head.
+
+## Interpretation
+
+The [`interpretation`](interpretation/) folder contains the DRPT interpretation notebook, NeST system mappings, null-importance analysis code, gene and system importance results, epistasis scores, and CRISPR-screen data used for downstream validation.
 
 ## Usage
 
-The following are key hyper-parameters used by the model:
+The following are key model hyperparameters:
 
-1. Propagation option:
-   * _--mut2gene_ : determines 
-   * _--sys2cell_ : determines whether model will propogate to the root system
-   * _--cell2sys_ : determines whether model will propogate back down from the root system
-   * _--sys2gene_ : determines whether model will proogate back down to genes (optional)
-   * _--drug_embedding_ : determines whether the model will with optimize drug emebedding from random (recommended)
-   * _--diff_transformer_ : determines whether the model will use Differential Attention
-3. Model parameter:
-   * _--hiddens_dims_: embedding and hierarchical transformer dimension size. Recommended is 128
-4. Training parameters: 
-   * _--epochs_ : the number of epoch to run during the training phase. Recommended is 150-200.
-   * _--val_step_: Validation step
-   * _--batch_size_ : the size of each batch to process at a time. Recommended is 32.
-You may increase this number to speed up the training process within the memory capacity
-   * _--z_weight_ : for the continuous phenotype, with high `z_weight` will be more sampled  
-   * _--dropout_: dropout option. Default is set 0.2
-   * _--lr_ : Learning rate. Default is set 0.001.
-   * _--wd_ : Weight decay. Default is set 0.001.
-5. GPU option:
-   * Single GPU option
-     * _--cuda_ : the ID of GPU unit that you want to use for the model training. The default setting
-     is to use GPU 0.
-   * Multi GPU option (multi-node will be supported)
-     * _--multiprocessing-distributed_ : determines whether model will be trained in multi-gpu distributed set-up
-     * _--world_size_ : size of world, default is 1
-     * _--rank_ : rank, default is 0
-     * _--local_rank_ : local rank, default is 0
-     * _--dist_url_ : distribute url, `tcp://127.0.0.1:2222`
-     * _--dist_backend_ : distribute backend default is `nccl`
-6. Model input and output:
-   * _--model_: if you have trained model, put the path to the trained model.
-   * _--out_: a name of directory where you want to store the trained models.
+1. Propagation options:
+   - `--mut2gene`: determines whether mutations propagate to genes.
+   - `--sys2cell`: determines whether information propagates from systems to the root cell node.
+   - `--cell2sys`: determines whether information propagates from the root cell node back to systems.
+   - `--sys2gene`: determines whether information propagates from systems back to genes (optional).
+   - `--drug_embedding`: determines whether the model learns drug embeddings from random initialization (recommended).
+   - `--diff_transformer`: determines whether the model uses differential attention.
 
-## Model Training Example (Single GPU)
+2. Model parameters:
+   - `--hidden_dims`: embedding and hierarchical-transformer dimension. The recommended value is 128.
 
-Review the sample shell file, `DRPT.sh`, to view how to run a training instance of the model.
+3. Training parameters:
+   - `--epochs`: number of training epochs. The recommended range is 150–200.
+   - `--val_step`: number of training steps between validation runs.
+   - `--batch_size`: number of samples processed in each batch. The recommended value is 32; larger values may improve throughput when memory permits.
+   - `--z_weight`: sampling weight for extreme values of a continuous phenotype.
+   - `--dropout`: dropout rate. The default is 0.2.
+   - `--lr`: learning rate. The default is 0.001.
+   - `--wd`: weight decay. The default is 0.001.
+
+4. Model input and output:
+   - `--model`: path to a previously trained model.
+   - `--out`: directory in which trained models will be stored.
+
+## Model training example
+
+See [`DRPT.sh`](DRPT.sh) for an example training command.
