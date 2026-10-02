@@ -308,7 +308,7 @@ if __name__ == "__main__":
         description="Semi-partial correlation importance (residualize Y_pred on CN & MUT only; attentions left raw). "
                     "Supports systems or genes. Z-test vs permutation null; Bonferroni & BH per drug + global BH."
     )
-    ap.add_argument("--results", type=str, default="results_g2d.pkl")
+    ap.add_argument("--results", type=str, default="model_results.pkl")
     ap.add_argument("--score", type=str, choices=["systems", "genes"], default="systems",
                     help="Which feature space to score.")
     # system mappings (for --score systems)

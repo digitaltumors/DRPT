@@ -60,3 +60,15 @@ The following are key model hyperparameters:
 ## Model training example
 
 See [`DRPT.sh`](DRPT.sh) for an example training command.
+
+## Model interpretation analysis
+
+[`get_model_embeddings_and_weights.py`](get_model_embeddings_and_weights.py) loads the saved [`rsi_model.pt`](rsi_model.pt) checkpoint and performs a forward pass over the complete RSI cell-line dataset. It collects the model predictions, gene and system attention weights, and gene and system embeddings for every drug and saves them as a drug-indexed dictionary in `interpretation/model_results.pkl`. This generated dictionary is used by the analyses in the [`interpretation`](interpretation/) folder.
+
+Run the extraction from the repository root after activating `g2pt_env`:
+
+```bash
+python get_model_embeddings_and_weights.py
+```
+
+The generated pickle is several gigabytes and is therefore not stored directly in Git. Pass `--help` to view options for the model, dataset, output path, device, batch size, and data-loader workers.
