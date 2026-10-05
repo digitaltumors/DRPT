@@ -58,9 +58,19 @@ The following are key model hyperparameters:
    - `--model`: path to a previously trained model.
    - `--out`: directory in which trained models will be stored.
 
-## Model training example
+## Cell line model training
 
-See [`DRPT.sh`](DRPT.sh) for an example training command.
+Two Slurm launchers are provided for training cell-line DRPT models:
+
+- [`DRPT-Evaluate.sh`](DRPT-Evaluate.sh) trains five models using the predefined train, validation, and test splits. These split-specific models are used to evaluate cell-line predictive performance and are written to the `models/` directory.
+- [`DRPT-Interpret.sh`](DRPT-Interpret.sh) trains one model on the complete RSI cell-line dataset with no validation or test split. It writes `rsi_model.pt` at the repository root for the downstream model-embedding, attention-weight, and interpretation workflow.
+
+From the repository root, submit the appropriate workflow after creating the `g2pt_env` environment:
+
+```bash
+sbatch DRPT-Evaluate.sh
+sbatch DRPT-Interpret.sh
+```
 
 ## MSK-CHORD patient finetuning
 

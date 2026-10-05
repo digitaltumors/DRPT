@@ -42,6 +42,4 @@ python patients/drpt_patient_transfer_msk.py \
   --time-bins 100 \
   --jobs 0 \
   --auc-batch-size 32 \
-  --output-prefix patients/msk_rsi_drugs_embedding_transfer
-
-
+  --output-prefix patients/msk_embedding_transfer_mlp_cox_ph_risk_1
