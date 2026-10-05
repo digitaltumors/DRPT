@@ -38,6 +38,7 @@ The following are key model hyperparameters:
    - `--sys2cell`: determines whether information propagates from systems to the root cell node.
    - `--cell2sys`: determines whether information propagates from the root cell node back to systems.
    - `--sys2gene`: determines whether information propagates from systems back to genes (optional).
+   - `--gene2drug`: determines whether the model uses drug embeddings informed by genes in the prediction layer.
    - `--drug_embedding`: determines whether the model learns drug embeddings from random initialization (recommended).
    - `--diff_transformer`: determines whether the model uses differential attention.
 
@@ -60,6 +61,19 @@ The following are key model hyperparameters:
 ## Model training example
 
 See [`DRPT.sh`](DRPT.sh) for an example training command.
+
+## MSK-CHORD patient finetuning
+
+[`MSK-Transfer.sh`](MSK-Transfer.sh) fine-tunes the patient prediction head using MSK-CHORD patient data. The pretrained DRPT cell-line model remains frozen while its patient genomic embeddings are transferred to a two-layer multilayer perceptron optimized with a Cox proportional-hazards objective.
+
+From the repository root, activate the project environment and submit the provided Slurm script:
+
+```bash
+conda activate g2pt_env
+sbatch MSK-Transfer.sh
+```
+
+On a compatible machine where Slurm directives are not needed, the script can instead be run with `bash MSK-Transfer.sh`. Outputs are written to the [`patients`](patients/) folder.
 
 ## Model interpretation analysis
 

@@ -23,6 +23,7 @@ python train_drug_response_model.py \
     --sys2cell \
     --cell2sys \
     --sys2gene \
+    --gene2drug \
     --drug_embedding \
     --diff_transformer \
     --with_indices \

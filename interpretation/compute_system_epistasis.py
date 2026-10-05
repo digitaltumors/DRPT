@@ -4,9 +4,13 @@ import argparse
 import itertools
 import math
 import pickle
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 
 try:
     from joblib import Parallel, delayed
@@ -656,11 +660,11 @@ def main():
     parser.add_argument("--importance_csv", default="system_semi_partial_importance_g2d.csv")
     parser.add_argument("--crispr_csv", required=True, help="CSV with columns: system,best_fdr; optional drug column.")
 
-    parser.add_argument("--amp_file", default="data/old_copynumber/cell2cnamplification_ctg_av.txt")
-    parser.add_argument("--del_file", default="data/old_copynumber/cell2cndeletion_ctg_av.txt")
-    parser.add_argument("--mut_file", default="data/cell2mutation_ctg_av.txt")
-    parser.add_argument("--cell_index_file", default="data/cell2ind_av.txt")
-    parser.add_argument("--gene_index_file", default="data/gene2ind_ctg_av.txt")
+    parser.add_argument("--amp_file", default=str(REPOSITORY_ROOT / "data/cell2cnamplification_ctg_av.txt"))
+    parser.add_argument("--del_file", default=str(REPOSITORY_ROOT / "data/cell2cndeletion_ctg_av.txt"))
+    parser.add_argument("--mut_file", default=str(REPOSITORY_ROOT / "data/cell2mutation_ctg_av.txt"))
+    parser.add_argument("--cell_index_file", default=str(REPOSITORY_ROOT / "data/cell2ind_av.txt"))
+    parser.add_argument("--gene_index_file", default=str(REPOSITORY_ROOT / "data/gene2ind_ctg_av.txt"))
 
     parser.add_argument("--max_system_genes", type=int, default=100)
     parser.add_argument("--include_cnb", action="store_true", default=True)

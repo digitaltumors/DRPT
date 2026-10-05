@@ -4,11 +4,12 @@ import argparse
 import itertools
 import pickle
 from collections import defaultdict
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from compute_system_epistasis_codex import (
+from compute_system_epistasis import (
     Parallel,
     delayed,
     bh_fdr,
@@ -19,6 +20,9 @@ from compute_system_epistasis_codex import (
     split_alteration_feature,
     test_pair_fast,
 )
+
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 
 
 def load_pickle(path: str):
@@ -397,11 +401,11 @@ def main():
     parser.add_argument("--drugs", required=True, help="Comma-separated drug names.")
     parser.add_argument("--response_key", default="actual", choices=["actual", "predictions"])
 
-    parser.add_argument("--amp_file", default="data/old_copynumber/cell2cnamplification_ctg_av.txt")
-    parser.add_argument("--del_file", default="data/old_copynumber/cell2cndeletion_ctg_av.txt")
-    parser.add_argument("--mut_file", default="data/cell2mutation_ctg_av.txt")
-    parser.add_argument("--cell_index_file", default="data/cell2ind_av.txt")
-    parser.add_argument("--gene_index_file", default="data/gene2ind_ctg_av.txt")
+    parser.add_argument("--amp_file", default=str(REPOSITORY_ROOT / "data/cell2cnamplification_ctg_av.txt"))
+    parser.add_argument("--del_file", default=str(REPOSITORY_ROOT / "data/cell2cndeletion_ctg_av.txt"))
+    parser.add_argument("--mut_file", default=str(REPOSITORY_ROOT / "data/cell2mutation_ctg_av.txt"))
+    parser.add_argument("--cell_index_file", default=str(REPOSITORY_ROOT / "data/cell2ind_av.txt"))
+    parser.add_argument("--gene_index_file", default=str(REPOSITORY_ROOT / "data/gene2ind_ctg_av.txt"))
 
     parser.add_argument("--max_system_genes", type=int, default=100)
     parser.add_argument("--include_cnb", action="store_true", default=True)
