@@ -62,8 +62,8 @@ The following are key model hyperparameters:
 
 Two Slurm launchers are provided for training cell-line DRPT models:
 
-- [`DRPT-Evaluate.sh`](DRPT-Evaluate.sh) trains five models using the predefined train, validation, and test splits. These split-specific models are used to evaluate cell-line predictive performance and are written to the `models/` directory.
-- [`DRPT-Interpret.sh`](DRPT-Interpret.sh) trains one model on the complete RSI cell-line dataset with no validation or test split. It writes `rsi_model.pt` at the repository root for the downstream model-embedding, attention-weight, and interpretation workflow.
+- [`DRPT-Evaluate.sh`](DRPT-Evaluate.sh) trains five models using the predefined train, validation, and test splits. The committed checkpoints `models/rsi_model_0.pt` through `models/rsi_model_4.pt` are the five folds used for the reported cell-line evaluation, and the shell script reproduces their training workflow.
+- [`DRPT-Interpret.sh`](DRPT-Interpret.sh) trains one separate model on the complete RSI cell-line dataset with no validation or test split. It writes `rsi_model.pt` at the repository root for the downstream model-embedding, attention-weight, and interpretation workflow. This full-data interpretation model is not one of the five evaluation folds in `models/`.
 
 From the repository root, submit the appropriate workflow after creating the `g2pt_env` environment:
 
